@@ -15,7 +15,7 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur l'API C411 avec plusieurs niveaux de repli."""
+    """Recherche un torrent sur l'API C411 avec plusieurs niveaux de repli et un tri intelligent."""
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "PlexManager/1.0"
@@ -40,15 +40,12 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print(f"Code HTTP C411 : {r.status_code}")
         
         if r.status_code != 200:
-            print(f"Erreur API : {r.text}")
-            sys.exit(1)
+            return []
 
         try:
             data = r.json()
         except Exception:
-            print("❌ Réponse non JSON reçue de C411 :")
-            print(r.text)
-            sys.exit(1)
+            return []
 
         if isinstance(data, dict):
             return data.get("results", [])
@@ -64,7 +61,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print("⚠️ Aucun résultat avec l'année. Essai avec le titre complet...")
         results = execute_query(clean_title)
 
-    # 3. Essai de repli sur les mots-clés principaux (ex: "Star Wars")
+    # 3. Essai de repli avec les mots-clés principaux (ex: "Star Wars")
     if not results:
         words = [w for w in clean_title.split() if w.lower() not in ['les', 'des', 'un', 'une', 'la', 'le', 'de', 'du']]
         short_query = ' '.join(words[:2]) if len(words) >= 2 else clean_title
@@ -76,9 +73,20 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print(f"❌ Aucun torrent trouvé sur C411 pour : {clean_title}")
         sys.exit(0)
 
-    torrent = results[0]
-    print(f"✅ Torrent trouvé : {torrent.get('name', 'Inconnu')}")
-    return torrent
+    # 🎯 Sélection intelligente du meilleur torrent (privilégie l'année correspondante)
+    best_match = None
+    for torrent in results:
+        t_name = torrent.get("name", "").lower()
+        if year and year in t_name:
+            best_match = torrent
+            break
+
+    # Si l'année exacte n'est pas dans le nom, on prend le premier résultat pertinent
+    if not best_match:
+        best_match = results[0]
+
+    print(f"✅ Torrent sélectionné : {best_match.get('name', 'Inconnu')}")
+    return best_match
 
 def send_to_alldebrid(apikey: str, torrent_data: dict):
     """Extrait le magnet et l'envoie au convertisseur AllDebrid."""
