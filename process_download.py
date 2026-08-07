@@ -15,7 +15,7 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur C411 avec plusieurs niveaux de repli et un tri intelligent."""
+    """Recherche un torrent sur C411 en utilisant le paramètre 'name' de l'API."""
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "PlexManager/1.0"
@@ -25,12 +25,12 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
     search_query_with_year = f"{clean_title} {year}".strip()
 
     def execute_query(query):
-        print(f"🔍 Recherche C411 : {query}")
+        print(f"🔍 Recherche C411 (name={query})")
         try:
             r = requests.get(
-                "https://c411.org/torrents",  # URL mise à jour vers la route principale du site
+                "https://c411.org/torrents",
                 headers=headers,
-                params={"q": query},
+                params={"name": query},  # Correction validée par l'inspecteur réseau
                 timeout=TIMEOUT_SECONDS
             )
         except requests.exceptions.RequestException as e:
@@ -38,7 +38,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
-        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")  # Permet de voir ce que le site renvoie
+        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")
         
         if r.status_code != 200:
             return []
@@ -46,7 +46,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         try:
             data = r.json()
         except Exception:
-            print("⚠️ La réponse reçue n'est pas au format JSON (probablement du HTML).")
+            print("⚠️ La réponse reçue n'est pas au format JSON.")
             return []
 
         if isinstance(data, dict):
@@ -83,7 +83,6 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             best_match = torrent
             break
 
-    # Si l'année exacte n'est pas dans le nom, on prend le premier résultat pertinent
     if not best_match:
         best_match = results[0]
 
@@ -168,7 +167,6 @@ def main():
 
     print(f"🎬 Film demandé : {title} ({year})")
 
-    # Exécution de la chaîne
     torrent = search_c411_torrent(c411_token, title, year)
     send_to_alldebrid(alldebrid_key, torrent)
 
