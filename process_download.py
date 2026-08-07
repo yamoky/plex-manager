@@ -15,7 +15,8 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur C411 avec les paramètres complets de l'API web."""
+    """Recherche un torrent sur C411 en passant par un proxy pour éviter le blocage Cloudflare."""
+    
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -25,13 +26,20 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         "Origin": "https://c411.org/"
     }
 
+    # Exemple de configuration d'un proxy (si tu en as un, ou via un service de contournement gratuit)
+    # Si tu as un proxy personnel, mets son adresse ici (ex: "http://user:pass@ip:port")
+    # Laisse vide ou commente si tu veux tester l'alternative du scraper direct sans proxy d'abord.
+    proxies = {
+        # "http": "http://ton_proxy:port",
+        # "https": "http://ton_proxy:port"
+    }
+
     clean_title = clean_movie_title(title)
     search_query_with_year = f"{clean_title} {year}".strip()
 
     def execute_query(query):
-        print(f"🔍 Recherche C411 (name={query})")
+        print(f"🔍 Recherche C411 via proxy (name={query})")
         
-        # Paramètres exacts exigés par l'API de C411 vus dans le navigateur
         params = {
             "page": 1,
             "perPage": 25,
@@ -41,20 +49,22 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         }
 
         try:
+            # On passe l'argument proxies=proxies à la requête requests.get
             r = requests.get(
                 "https://c411.org/torrents",
                 headers=headers,
                 params=params,
+                proxies=proxies if proxies.get("http") else None,
                 timeout=TIMEOUT_SECONDS
             )
         except requests.exceptions.RequestException as e:
-            print(f"❌ Erreur réseau lors de la connexion à C411 : {e}")
+            print(f"❌ Erreur réseau lors de la connexion via proxy : {e}")
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
-        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")
         
-        if r.status_code != 200:
+        if r.text.strip().startswith("<!DOCTYPE html>") or "<html" in r.text[:100].lower():
+            print("⚠️ Le site a renvoyé une page HTML (protection anti-bot toujours active).")
             return []
 
         try:
@@ -89,7 +99,6 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print(f"❌ Aucun torrent trouvé sur C411 pour : {clean_title}")
         sys.exit(0)
 
-    # 🎯 Sélection intelligente du meilleur torrent
     best_match = None
     for torrent in results:
         t_name = torrent.get("name", "").lower()
