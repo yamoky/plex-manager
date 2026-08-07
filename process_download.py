@@ -64,12 +64,12 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print("⚠️ Aucun résultat avec l'année. Essai avec le titre complet...")
         results = execute_query(clean_title)
 
-    # 3. Essai de repli ultra-court (ex: garde les 2 premiers mots principaux, ex: "Star Wars")
+    # 3. Essai de repli sur les mots-clés principaux (ex: "Star Wars")
     if not results:
         words = [w for w in clean_title.split() if w.lower() not in ['les', 'des', 'un', 'une', 'la', 'le', 'de', 'du']]
         short_query = ' '.join(words[:2]) if len(words) >= 2 else clean_title
         if short_query.lower() != clean_title.lower():
-            print(f"⚠️ Essai avec les mots-clés principaux : {short_query}")
+            print(f"⚠️ Essai de repli avec les mots-clés : {short_query}")
             results = execute_query(short_query)
 
     if not results:
