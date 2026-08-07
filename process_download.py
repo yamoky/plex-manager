@@ -15,7 +15,7 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur l'API C411 avec plusieurs niveaux de repli et un tri intelligent."""
+    """Recherche un torrent sur C411 avec plusieurs niveaux de repli et un tri intelligent."""
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "PlexManager/1.0"
@@ -28,7 +28,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print(f"🔍 Recherche C411 : {query}")
         try:
             r = requests.get(
-                "https://c411.org/api/torrents",
+                "https://c411.org/torrents",  # URL mise à jour vers la route principale du site
                 headers=headers,
                 params={"q": query},
                 timeout=TIMEOUT_SECONDS
@@ -38,7 +38,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
-        print(f"📄 Réponse brute C411 : {r.text[:300]}")  # Affiche le début de la réponse brute pour déboguer
+        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")  # Permet de voir ce que le site renvoie
         
         if r.status_code != 200:
             return []
@@ -46,7 +46,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         try:
             data = r.json()
         except Exception:
-            print("⚠️ Impossible de décoder la réponse JSON de C411.")
+            print("⚠️ La réponse reçue n'est pas au format JSON (probablement du HTML).")
             return []
 
         if isinstance(data, dict):
