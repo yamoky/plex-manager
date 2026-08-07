@@ -21,7 +21,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Verify Credentials & Process Torrent Search
+      - name: Process Torrent Search and Send to AllDebrid
         env:
           INPUT_USER: ${{ github.event.client_payload.user }}
           INPUT_PASS_HASH: ${{ github.event.client_payload.pass_hash }}
@@ -35,7 +35,7 @@ jobs:
           python -c "
           import os, sys, requests, hashlib
 
-          # 1. Verification Authentification
+          # 1. Verification de l'authentification
           valid_user = os.environ.get('VALID_USER')
           valid_pass = os.environ.get('VALID_PASS')
           input_user = os.environ.get('INPUT_USER')
@@ -44,12 +44,12 @@ jobs:
           expected_hash = hashlib.sha256(valid_pass.encode('utf-8')).hexdigest()
 
           if input_user != valid_user or input_hash.lower() != expected_hash.lower():
-              print('❌ Authentification echouee : identifiant ou mot de passe incorrect.')
+              print('❌ Erreur : Authentification echouee.')
               sys.exit(1)
 
-          print('✅ Authentification reussie !')
+          print('✅ Authentification reussie.')
 
-          # 2. Recherche sur C411 via API Torznab
+          # 2. Recherche sur C411
           c411_token = os.environ.get('C411_TOKEN')
           title = os.environ.get('MOVIE_TITLE')
           year = os.environ.get('MOVIE_YEAR')
@@ -58,29 +58,30 @@ jobs:
           print(f'🔍 Recherche de \"{search_query}\" sur C411...')
 
           headers = {'Authorization': f'Bearer {c411_token}'}
-          # Endpoint de recherche C411
           res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
 
           if res.status_code != 200:
-              print(f'❌ Erreur lors de la recherche C411 (Code: {res.status_code})')
+              print(f'❌ Erreur API C411 (Code: {res.status_code})')
               sys.exit(1)
 
           data = res.json()
           results = data.get('results', []) or data if isinstance(data, list) else []
 
           if not results:
-              print(f'⚠️ Aucun torrent trouve sur C411 pour {search_query}')
+              print(f'⚠️ Aucun torrent trouve pour {search_query}')
               sys.exit(0)
 
-          # Recuperation du premier torrent correspondant
           target = results[0]
           download_url = target.get('download_url') or target.get('link')
+          print(f'📦 Torrent trouve : {target.get(\"name\", \"Inconnu\")}')
 
-          # 3. Envoi a AllDebrid
+          # 3. Envoi du lien vers AllDebrid
           alldebrid_key = os.environ.get('ALLDEBRID_KEY')
-          print('🚀 Envoi de la source a AllDebrid...')
+          print('🚀 Envoi du magnet/torrent a AllDebrid...')
 
-          upload_res = requests.get(f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={download_url}')
-          print('Response AllDebrid:', upload_res.json())
-          print('✅ Processus termine avec succes !')
+          upload_url = f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={requests.utils.quote(download_url)}'
+          upload_res = requests.get(upload_url)
+          
+          print('Reponse AllDebrid:', upload_res.json())
+          print('✨ Traitement termine avec succes !')
           "
