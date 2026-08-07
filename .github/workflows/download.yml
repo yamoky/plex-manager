@@ -33,7 +33,7 @@ jobs:
           MOVIE_YEAR: ${{ github.event.client_payload.year }}
         run: |
           python -c "
-          import os, sys, requests, hashlib
+          import os, sys, requests, hashlib, re
 
           # 1. Verification de l'authentification
           valid_user = os.environ.get('VALID_USER')
@@ -49,13 +49,16 @@ jobs:
 
           print('✅ Authentification reussie.')
 
-          # 2. Recherche sur C411
+          # 2. Recherche elargie sur C411
           c411_token = os.environ.get('C411_TOKEN')
-          title = os.environ.get('MOVIE_TITLE')
-          year = os.environ.get('MOVIE_YEAR')
+          title = os.environ.get('MOVIE_TITLE', '')
+          
+          # On ne garde que les mots principaux du titre (ex: 'Star Wars Derniers Jedi')
+          clean_title = re.sub(r'[:\\?!\-,\"]', ' ', title)
+          words = [w for w in clean_title.split() if len(w) > 2] # Ignore les petits mots
+          search_query = ' '.join(words[:3]) # Prend les 3 premiers mots cles majeurs
 
-          search_query = f'{title} {year}'
-          print(f'🔍 Recherche de \"{search_query}\" sur C411...')
+          print(f'🔍 Recherche elargie de \"{search_query}\" sur C411...')
 
           headers = {'Authorization': f'Bearer {c411_token}'}
           res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
@@ -68,14 +71,12 @@ jobs:
           results = data.get('results', []) or data if isinstance(data, list) else []
 
           if not results:
-              print(f'⚠️ Aucun torrent trouve pour {search_query}')
+              print(f'❌ Aucun resultat trouve sur C411 pour {search_query}')
               sys.exit(0)
 
           target = results[0]
-          
-          # On recupere de preference le lien magnet ou le lien de telechargement direct du torrent
           torrent_link = target.get('magnet') or target.get('download_url') or target.get('link')
-          print(f'📦 Torrent cible : {target.get(\"name\", \"Inconnu\")}');
+          print(f'📦 Torrent cible trouve : {target.get(\"name\", \"Inconnu\")}')
 
           # 3. Envoi au convertisseur Torrents d'AllDebrid
           alldebrid_key = os.environ.get('ALLDEBRID_KEY')
