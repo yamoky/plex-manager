@@ -49,17 +49,17 @@ jobs:
 
           print('✅ Authentification reussie.')
 
-          # 2. Nettoyage et remplacement des points/tirets par des espaces
+          # 2. Nettoyage approfondi incluant les apostrophes
           c411_token = os.environ.get('C411_TOKEN')
           title = os.environ.get('MOVIE_TITLE', '')
           year = os.environ.get('MOVIE_YEAR', '')
 
-          # On remplace les points, tirets bas et ponctuations par des espaces
-          clean_title = re.sub(r'[._:\\?!\-,]', ' ', title)
+          # On remplace les apostrophes, points, tirets et ponctuations par des espaces
+          clean_title = re.sub(r'[\'’\\._:\\?!\-,]', ' ', title)
           clean_title = ' '.join(clean_title.split())
 
           search_query = f'{clean_title} {year}'.strip()
-          print(f'🔍 Recherche nettoyees de \"{search_query}\" sur C411...')
+          print(f'🔍 Recherche de \"{search_query}\" sur C411...')
 
           headers = {'Authorization': f'Bearer {c411_token}'}
           res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
