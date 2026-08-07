@@ -15,21 +15,26 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur l'API C411 avec l'en-tête Accept: application/json."""
+    """Recherche un torrent sur C411 avec des en-têtes HTTP de navigateur pour éviter le blocage."""
+    
+    # En-têtes complets pour faire croire à une requête légitime de navigateur
     headers = {
         "Authorization": f"Bearer {token}",
-        "User-Agent": "PlexManager/1.0",
-        "Accept": "application/json"  # Indispensable pour éviter de recevoir du HTML
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://c411.org/",
+        "Origin": "https://c411.org/"
     }
 
     clean_title = clean_movie_title(title)
     search_query_with_year = f"{clean_title} {year}".strip()
 
     def execute_query(query):
-        print(f"🔍 Recherche API C411 (name={query})")
+        print(f"🔍 Recherche C411 (name={query})")
         try:
             r = requests.get(
-                "https://c411.org/api/torrents/search",  # Utilisation de la route API dédiée
+                "https://c411.org/api/torrents/search",
                 headers=headers,
                 params={"name": query},
                 timeout=TIMEOUT_SECONDS
@@ -39,9 +44,10 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
-        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")
         
-        if r.status_code != 200:
+        # Vérification si on reçoit du HTML (protection anti-bot)
+        if r.text.strip().startswith("<!DOCTYPE html>") or "<html" in r.text[:100].lower():
+            print("⚠️ Le site a renvoyé une page HTML (protection anti-bot ou redirection).")
             return []
 
         try:
