@@ -7,19 +7,25 @@
   <style>
     * { box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #141414; color: #fff; margin: 0; padding: 20px; }
-    h1 { text-align: center; color: #e50914; margin-bottom: 10px; }
-    .auth-container { background: #1f1f1f; padding: 15px; border-radius: 8px; max-width: 400px; margin: 0 auto 20px auto; border: 1px solid #333; }
-    .auth-container h3 { margin-top: 0; margin-bottom: 10px; font-size: 16px; text-align: center; }
-    .auth-group { display: flex; flex-direction: column; gap: 10px; }
-    .auth-status { font-size: 12px; text-align: center; margin-top: 8px; font-weight: bold; }
+    h1 { text-align: center; color: #e50914; margin-bottom: 20px; }
+    
+    .card-box { background: #1f1f1f; padding: 20px; border-radius: 8px; max-width: 400px; margin: 0 auto; border: 1px solid #333; text-align: center; }
+    .input-group { display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; }
+    input { padding: 12px; border-radius: 6px; border: 1px solid #333; background: #222; color: #fff; font-size: 16px; width: 100%; text-align: center; }
+    
+    .btn-red { padding: 12px 20px; background: #e50914; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 16px; width: 100%; }
+    .btn-red:hover { background: #f40612; }
+    .btn-secondary { background: #333; color: #aaa; margin-top: 10px; font-size: 13px; }
+
+    /* Zone de recherche cachée au départ */
+    #app-section { display: none; max-width: 800px; margin: 0 auto; }
+    .user-bar { display: flex; justify-content: space-between; align-items: center; background: #1f1f1f; padding: 10px 15px; border-radius: 6px; margin-bottom: 20px; font-size: 14px; border: 1px solid #333; }
     .search-container { display: flex; justify-content: center; gap: 10px; max-width: 500px; margin: 0 auto 20px auto; }
-    input { padding: 12px; border-radius: 6px; border: 1px solid #333; background: #222; color: #fff; font-size: 16px; width: 100%; }
-    button { padding: 12px 20px; background: #e50914; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; white-space: nowrap; }
-    button:hover { background: #f40612; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; max-width: 1000px; margin: 0 auto; }
+    
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
     .card { background: #1f1f1f; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #2a2a2a; }
     .card img { width: 100%; height: 210px; object-fit: cover; background: #111; }
-    .card-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; }
+    .card-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; text-align: center; }
     .card h3 { font-size: 13px; margin: 0; line-height: 1.3; }
     .status { text-align: center; font-size: 14px; margin: 15px 0; padding: 10px; border-radius: 6px; }
   </style>
@@ -28,44 +34,75 @@
 
   <h1>Plex Manager</h1>
   
-  <div class="auth-container">
-    <h3>Connexion Sécurisée</h3>
-    <div class="auth-group">
-      <input type="text" id="username" placeholder="Identifiant" oninput="updateAuth()">
-      <input type="password" id="password" placeholder="Mot de passe" oninput="updateAuth()">
+  <!-- ECRAN 1 : CONNEXION -->
+  <div id="login-section" class="card-box">
+    <h3 style="margin-top:0;">Connexion</h3>
+    <div class="input-group">
+      <input type="text" id="username" placeholder="Identifiant">
+      <input type="password" id="password" placeholder="Mot de passe">
     </div>
-    <div id="auth-status" class="auth-status"></div>
+    <button class="btn-red" onclick="handleLogin()">Se connecter</button>
+    <div id="login-error" style="color:#f44336; font-size:13px; margin-top:10px;"></div>
   </div>
 
-  <div class="search-container">
-    <input type="text" id="query" placeholder="Rechercher un film..." onkeypress="if(event.key==='Enter') searchMovie()">
-    <button onclick="searchMovie()">Chercher</button>
-  </div>
+  <!-- ECRAN 2 : RECHERCHE ET TELECHARGEMENT -->
+  <div id="app-section">
+    <div class="user-bar">
+      <span>Connecté en tant que : <strong id="logged-user" style="color:#4caf50;"></strong></span>
+      <button class="btn-red btn-secondary" style="width:auto; padding:6px 12px;" onclick="handleLogout()">Déconnexion</button>
+    </div>
 
-  <div id="status" class="status"></div>
-  <div id="results" class="grid"></div>
+    <div class="search-container">
+      <input type="text" id="query" placeholder="Rechercher un film..." onkeypress="if(event.key==='Enter') searchMovie()">
+      <button class="btn-red" style="width:auto;" onclick="searchMovie()">Chercher</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="results" class="grid"></div>
+  </div>
 
   <script>
     const TMDB_API_KEY = "15d2ce10022386a24823843b37b41c94";
-    
-    document.getElementById('username').value = localStorage.getItem('plex_user') || '';
-    document.getElementById('password').value = localStorage.getItem('plex_pass') || '';
-    updateAuth();
 
-    function updateAuth() {
-      const u = document.getElementById('username').value;
-      const p = document.getElementById('password').value;
+    // Vérification au chargement
+    window.onload = function() {
+      const savedUser = localStorage.getItem('plex_user');
+      const savedPass = localStorage.getItem('plex_pass');
+      if (savedUser && savedPass) {
+        showApp(savedUser);
+      }
+    };
+
+    function handleLogin() {
+      const u = document.getElementById('username').value.trim();
+      const p = document.getElementById('password').value.trim();
+      const errDiv = document.getElementById('login-error');
+
+      if (!u || !p) {
+        errDiv.innerText = "Veuillez remplir l'identifiant et le mot de passe.";
+        return;
+      }
+
+      // Sauvegarde locale et passage à l'écran de recherche
       localStorage.setItem('plex_user', u);
       localStorage.setItem('plex_pass', p);
+      errDiv.innerText = "";
+      showApp(u);
+    }
 
-      const statusEl = document.getElementById('auth-status');
-      if (u && p) {
-        statusEl.style.color = '#4caf50';
-        statusEl.innerText = `Connecté en tant que : ${u}`;
-      } else {
-        statusEl.style.color = '#ff9800';
-        statusEl.innerText = "Saisissez votre identifiant et mot de passe";
-      }
+    function handleLogout() {
+      localStorage.removeItem('plex_user');
+      localStorage.removeItem('plex_pass');
+      document.getElementById('username').value = '';
+      document.getElementById('password').value = '';
+      document.getElementById('app-section').style.display = 'none';
+      document.getElementById('login-section').style.display = 'block';
+    }
+
+    function showApp(username) {
+      document.getElementById('login-section').style.display = 'none';
+      document.getElementById('logged-user').innerText = username;
+      document.getElementById('app-section').style.display = 'block';
     }
 
     async function hashSHA256(str) {
@@ -100,7 +137,7 @@
         }
 
         statusDiv.innerText = "";
-        data.results.slice(0, 8).forEach(m => {
+        data.results.slice(0, 10).forEach(m => {
           const poster = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/500x750?text=Pas+d+image';
           const year = m.release_date ? m.release_date.split('-')[0] : 'Année inconnue';
           const cleanTitle = m.title.replace(/'/g, "\\'");
@@ -110,7 +147,7 @@
               <img src="${poster}" alt="${m.title}">
               <div class="card-content">
                 <h3>${m.title} (${year})</h3>
-                <button onclick="requestMovie('${cleanTitle}', '${year}')">Ajouter</button>
+                <button class="btn-red" onclick="requestMovie('${cleanTitle}', '${year}')">Ajouter</button>
               </div>
             </div>
           `;
@@ -122,15 +159,9 @@
     }
 
     async function requestMovie(title, year) {
-      const user = document.getElementById('username').value;
-      const pass = document.getElementById('password').value;
+      const user = localStorage.getItem('plex_user');
+      const pass = localStorage.getItem('plex_pass');
       const statusDiv = document.getElementById('status');
-
-      if (!user || !pass) {
-        statusDiv.style.color = '#f44336';
-        statusDiv.innerText = "Veuillez saisir votre identifiant et mot de passe.";
-        return;
-      }
 
       statusDiv.style.color = '#ff9800';
       statusDiv.innerText = `Chiffrement et envoi de la demande pour "${title}"...`;
@@ -157,10 +188,10 @@
 
         if (response.ok || response.status === 204) {
           statusDiv.style.color = '#4caf50';
-          statusDiv.innerText = `Demande transmise avec succès pour "${title}" ! Le serveur traite le téléchargement.`;
+          statusDiv.innerText = `Demande transmise avec succès pour "${title}" ! Le serveur valide l'accès et traite le téléchargement.`;
         } else {
           statusDiv.style.color = '#f44336';
-          statusDiv.innerText = "Erreur d'envoi. Vérifiez la configuration du dépôt.";
+          statusDiv.innerText = "Erreur d'envoi. Vérifiez les accès.";
         }
       } catch (err) {
         statusDiv.style.color = '#f44336';
