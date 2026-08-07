@@ -38,6 +38,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
+        print(f"📄 Réponse brute C411 : {r.text[:300]}")  # Affiche le début de la réponse brute pour déboguer
         
         if r.status_code != 200:
             return []
@@ -45,6 +46,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         try:
             data = r.json()
         except Exception:
+            print("⚠️ Impossible de décoder la réponse JSON de C411.")
             return []
 
         if isinstance(data, dict):
@@ -61,7 +63,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print("⚠️ Aucun résultat avec l'année. Essai avec le titre complet...")
         results = execute_query(clean_title)
 
-    # 3. Essai de repli avec les mots-clés principaux (ex: "Star Wars")
+    # 3. Essai de repli avec les mots-clés principaux
     if not results:
         words = [w for w in clean_title.split() if w.lower() not in ['les', 'des', 'un', 'une', 'la', 'le', 'de', 'du']]
         short_query = ' '.join(words[:2]) if len(words) >= 2 else clean_title
