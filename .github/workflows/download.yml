@@ -30,7 +30,6 @@ jobs:
           C411_TOKEN: ${{ secrets.C411_API_TOKEN }}
           ALLDEBRID_KEY: ${{ secrets.ALLDEBRID_API_KEY }}
           MOVIE_TITLE: ${{ github.event.client_payload.title }}
-          MOVIE_YEAR: ${{ github.event.client_payload.year }}
         run: |
           python -c "
           import os, sys, requests, hashlib, re
@@ -49,17 +48,16 @@ jobs:
 
           print('✅ Authentification reussie.')
 
-          # 2. Recherche avec le titre complet nettyoye
+          # 2. Simplification extreme du titre pour cibler l'essentiel
           c411_token = os.environ.get('C411_TOKEN')
           title = os.environ.get('MOVIE_TITLE', '')
-          year = os.environ.get('MOVIE_YEAR', '')
 
-          # On nettoie uniquement les caracteres speciaux tout en gardant le titre complet
+          # On nettoie et on prend les 2 premiers mots significatifs (ex: 'Star Wars')
           clean_title = re.sub(r'[:\\?!\-,]', ' ', title)
-          clean_title = ' '.join(clean_title.split())
+          words = [w for w in clean_title.split() if w.lower() not in ['episode', 'les', 'des', 'un', 'une', 'la', 'le', 'i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix']]
+          search_query = ' '.join(words[:2]) if words else clean_title
 
-          search_query = f'{clean_title} {year}'.strip()
-          print(f'🔍 Recherche de \"{search_query}\" sur C411...')
+          print(f'🔍 Recherche simplifiee de \"{search_query}\" sur C411...')
 
           headers = {'Authorization': f'Bearer {c411_token}'}
           res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
@@ -71,15 +69,8 @@ jobs:
           data = res.json()
           results = data.get('results', []) or data if isinstance(data, list) else []
 
-          # Si aucun resultat avec l'annee, on essaie sans l'annee
-          if not results and year:
-              print(f'⚠️ Aucun resultat avec l\'annee, essai sans l\'annee...')
-              res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(clean_title)}', headers=headers)
-              data = res.json()
-              results = data.get('results', []) or data if isinstance(data, list) else []
-
           if not results:
-              print(f'❌ Aucun resultat trouve sur C411 pour {clean_title}')
+              print(f'❌ Aucun resultat trouve sur C411 pour {search_query}')
               sys.exit(0)
 
           target = results[0]
