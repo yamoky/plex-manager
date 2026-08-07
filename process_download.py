@@ -1,79 +1,46 @@
-import sys
 import os
+import sys
 import hashlib
-import requests
-
-MOVIE_TITLE = sys.argv[1] if len(sys.argv) > 1 else ""
-MOVIE_YEAR = sys.argv[2] if len(sys.argv) > 2 else ""
-INPUT_USER = sys.argv[3] if len(sys.argv) > 3 else ""
-INPUT_HASH = sys.argv[4] if len(sys.argv) > 4 else ""
-
-# Secrets récupérés depuis les paramètres GitHub
-VALID_USER = os.environ.get("APP_USER")
-VALID_PASS = os.environ.get("APP_PASSWORD")
-C411_API_TOKEN = os.environ.get("C411_API_TOKEN")
-ALLDEBRID_API_KEY = os.environ.get("ALLDEBRID_API_KEY")
-
-def verify_credentials():
-    if not VALID_PASS or not VALID_USER:
-        print("Erreur : Paramètres de sécurité manquants sur GitHub.")
-        return False
-    
-    # Génération du hash SHA-256 attendu
-    expected_hash = hashlib.sha256(VALID_PASS.encode('utf-8')).hexdigest()
-    
-    if INPUT_USER == VALID_USER and INPUT_HASH.lower() == expected_hash.lower():
-        return True
-    return False
+from plex_manager.c411 import search_c411_torrent
+from plex_manager.alldebrid import send_to_alldebrid
 
 def main():
-    if not verify_credentials():
-        print(f"SÉCURITÉ : Échec d'authentification pour l'utilisateur '{INPUT_USER}'. Accès refusé.")
+    print("🔐 Vérification de l'authentification...")
+
+    valid_user = os.environ.get("VALID_USER")
+    valid_pass = os.environ.get("VALID_PASS")
+    input_user = os.environ.get("INPUT_USER", "")
+    input_hash = os.environ.get("INPUT_PASS_HASH", "")
+
+    if not valid_user or not valid_pass:
+        print("❌ Erreur : Les secrets d'authentification ne sont pas configurés.")
         sys.exit(1)
 
-    print(f"Authentification réussie pour '{INPUT_USER}'. Recherche : {MOVIE_TITLE} ({MOVIE_YEAR})")
-    
-    # 1. Recherche C411
-    search_url = f"https://api.c411.org/torrents/search?title={MOVIE_TITLE}"
-    headers = {"Authorization": f"Bearer {C411_API_TOKEN}"}
-    
-    try:
-        response = requests.get(search_url, headers=headers)
-        if response.status_code != 200:
-            print(f"Erreur recherche C411 : Code {response.status_code}")
-            return
-        results = response.json().get('results', [])
-    except Exception as e:
-        print(f"Erreur de connexion à l'API C411 : {e}")
-        return
+    expected_hash = hashlib.sha256(valid_pass.encode("utf-8")).hexdigest()
 
-    # 2. Filtrage strict pour le NAS MyCloud Home
-    best_torrent = None
-    for item in results:
-        name = item.get('name', '').lower()
-        size_gb = item.get('size', 0) / (1024**3)
-        
-        # Critères NAS : Max 10 Go, 1080p ou 720p, pas de REMUX ni AV1
-        if size_gb <= 10.0 and ('1080p' in name or '720p' in name):
-            if 'remux' not in name and 'av1' not in name:
-                best_torrent = item
-                break
-                
-    if not best_torrent:
-        print("Aucun torrent correspondant aux critères d'optimisation du NAS trouvé.")
-        return
+    if input_user != valid_user or input_hash.lower() != expected_hash.lower():
+        print("❌ Authentification refusée.")
+        sys.exit(1)
 
-    magnet_link = best_torrent.get('magnet_or_download_link')
-    print(f"Torrent sélectionné : {best_torrent.get('name')} ({size_gb:.2f} Go)")
+    print("✅ Authentification validée avec succès.")
 
-    # 3. Envoi vers AllDebrid
-    alldebrid_url = f"https://api.alldebrid.com/v4/magnet/upload?agent=PlexApp&apikey={ALLDEBRID_API_KEY}&magnet={magnet_link}"
-    res_ad = requests.get(alldebrid_url)
-    
-    if res_ad.status_code == 200:
-        print("Succès ! Film transmis à AllDebrid.")
-    else:
-        print(f"Erreur d'envoi vers AllDebrid : {res_ad.text}")
+    # Récupération des clés API et des métadonnées du film
+    c411_token = os.environ.get("C411_TOKEN")
+    alldebrid_key = os.environ.get("ALLDEBRID_KEY")
+    title = os.environ.get("MOVIE_TITLE", "")
+    year = os.environ.get("MOVIE_YEAR", "")
+
+    if not c411_token or not alldebrid_key:
+        print("❌ Erreur : Les clés API C411 ou AllDebrid sont manquantes.")
+        sys.exit(1)
+
+    print(f"🎬 Film demandé : {title} ({year})")
+
+    # Recherche sur C411
+    torrent = search_c411_torrent(c411_token, title, year)
+
+    # Envoi vers AllDebrid
+    send_to_alldebrid(alldebrid_key, torrent)
 
 if __name__ == "__main__":
     main()
