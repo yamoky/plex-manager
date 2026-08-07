@@ -49,16 +49,16 @@ jobs:
 
           print('✅ Authentification reussie.')
 
-          # 2. Recherche elargie sur C411
+          # 2. Recherche ciblee sur C411
           c411_token = os.environ.get('C411_TOKEN')
           title = os.environ.get('MOVIE_TITLE', '')
           
-          # On ne garde que les mots principaux du titre (ex: 'Star Wars Derniers Jedi')
+          # On nettoie et on garde les mots essentiels (ex: 'Star Wars Derniers Jedi' -> 'Star Wars')
           clean_title = re.sub(r'[:\\?!\-,\"]', ' ', title)
-          words = [w for w in clean_title.split() if len(w) > 2] # Ignore les petits mots
-          search_query = ' '.join(words[:3]) # Prend les 3 premiers mots cles majeurs
+          words = [w for w in clean_title.split() if w.lower() not in ['episode', 'les', 'des', 'un', 'une']]
+          search_query = ' '.join(words[:2]) # On se base sur les 2 mots les plus forts (ex: 'Star Wars')
 
-          print(f'🔍 Recherche elargie de \"{search_query}\" sur C411...')
+          print(f'🔍 Recherche ciblee de \"{search_query}\" sur C411...')
 
           headers = {'Authorization': f'Bearer {c411_token}'}
           res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
