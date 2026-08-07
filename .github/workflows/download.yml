@@ -1,29 +1,86 @@
-name: Process Movie Download
+name: Plex Download Processing
 
 on:
   repository_dispatch:
     types: [download_movie]
 
 jobs:
-  process:
+  process-download:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install dependencies
-        run: pip install requests
-
-      - name: Run Search & Send
-        env:
-          APP_USER: ${{ secrets.APP_USER }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-          C411_API_TOKEN: ${{ secrets.C411_API_TOKEN }}
-          ALLDEBRID_API_KEY: ${{ secrets.ALLDEBRID_API_KEY }}
+      - name: Install Dependencies
         run: |
-          python process_download.py "${{ github.event.client_payload.title }}" "${{ github.event.client_payload.year }}" "${{ github.event.client_payload.user }}" "${{ github.event.client_payload.pass_hash }}"
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Verify Credentials & Process Torrent Search
+        env:
+          INPUT_USER: ${{ github.event.client_payload.user }}
+          INPUT_PASS_HASH: ${{ github.event.client_payload.pass_hash }}
+          VALID_USER: ${{ secrets.APP_USER }}
+          VALID_PASS: ${{ secrets.APP_PASSWORD }}
+          C411_TOKEN: ${{ secrets.C411_API_TOKEN }}
+          ALLDEBRID_KEY: ${{ secrets.ALLDEBRID_API_KEY }}
+          MOVIE_TITLE: ${{ github.event.client_payload.title }}
+          MOVIE_YEAR: ${{ github.event.client_payload.year }}
+        run: |
+          python -c "
+          import os, sys, requests, hashlib
+
+          # 1. Verification Authentification
+          valid_user = os.environ.get('VALID_USER')
+          valid_pass = os.environ.get('VALID_PASS')
+          input_user = os.environ.get('INPUT_USER')
+          input_hash = os.environ.get('INPUT_PASS_HASH')
+
+          expected_hash = hashlib.sha256(valid_pass.encode('utf-8')).hexdigest()
+
+          if input_user != valid_user or input_hash.lower() != expected_hash.lower():
+              print('❌ Authentification echouee : identifiant ou mot de passe incorrect.')
+              sys.exit(1)
+
+          print('✅ Authentification reussie !')
+
+          # 2. Recherche sur C411 via API Torznab
+          c411_token = os.environ.get('C411_TOKEN')
+          title = os.environ.get('MOVIE_TITLE')
+          year = os.environ.get('MOVIE_YEAR')
+
+          search_query = f'{title} {year}'
+          print(f'🔍 Recherche de \"{search_query}\" sur C411...')
+
+          headers = {'Authorization': f'Bearer {c411_token}'}
+          # Endpoint de recherche C411
+          res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
+
+          if res.status_code != 200:
+              print(f'❌ Erreur lors de la recherche C411 (Code: {res.status_code})')
+              sys.exit(1)
+
+          data = res.json()
+          results = data.get('results', []) or data if isinstance(data, list) else []
+
+          if not results:
+              print(f'⚠️ Aucun torrent trouve sur C411 pour {search_query}')
+              sys.exit(0)
+
+          # Recuperation du premier torrent correspondant
+          target = results[0]
+          download_url = target.get('download_url') or target.get('link')
+
+          # 3. Envoi a AllDebrid
+          alldebrid_key = os.environ.get('ALLDEBRID_KEY')
+          print('🚀 Envoi de la source a AllDebrid...')
+
+          upload_res = requests.get(f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={download_url}')
+          print('Response AllDebrid:', upload_res.json())
+          print('✅ Processus termine avec succes !')
+          "
