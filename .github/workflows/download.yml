@@ -21,7 +21,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Process Torrent Search and Send to AllDebrid
+      - name: Send Torrent to AllDebrid
         env:
           INPUT_USER: ${{ github.event.client_payload.user }}
           INPUT_PASS_HASH: ${{ github.event.client_payload.pass_hash }}
@@ -72,16 +72,18 @@ jobs:
               sys.exit(0)
 
           target = results[0]
-          download_url = target.get('download_url') or target.get('link')
-          print(f'📦 Torrent trouve : {target.get(\"name\", \"Inconnu\")}')
-
-          # 3. Envoi du lien vers AllDebrid
-          alldebrid_key = os.environ.get('ALLDEBRID_KEY')
-          print('🚀 Envoi du magnet/torrent a AllDebrid...')
-
-          upload_url = f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={requests.utils.quote(download_url)}'
-          upload_res = requests.get(upload_url)
           
-          print('Reponse AllDebrid:', upload_res.json())
-          print('✨ Traitement termine avec succes !')
+          # On recupere de preference le lien magnet ou le lien de telechargement direct du torrent
+          torrent_link = target.get('magnet') or target.get('download_url') or target.get('link')
+          print(f'📦 Torrent cible : {target.get(\"name\", \"Inconnu\")}');
+
+          # 3. Envoi au convertisseur Torrents d'AllDebrid
+          alldebrid_key = os.environ.get('ALLDEBRID_KEY')
+          print('🚀 Envoi du magnet au convertisseur AllDebrid...')
+
+          alldebrid_url = f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={requests.utils.quote(torrent_link)}'
+          ad_res = requests.get(alldebrid_url)
+          
+          print('Reponse AllDebrid:', ad_res.json())
+          print('✨ Le torrent a bien ete soumis au convertisseur AllDebrid !')
           "
