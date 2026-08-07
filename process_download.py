@@ -15,22 +15,23 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur C411 en utilisant le paramètre 'name' de l'API."""
+    """Recherche un torrent sur l'API C411 avec l'en-tête Accept: application/json."""
     headers = {
         "Authorization": f"Bearer {token}",
-        "User-Agent": "PlexManager/1.0"
+        "User-Agent": "PlexManager/1.0",
+        "Accept": "application/json"  # Indispensable pour éviter de recevoir du HTML
     }
 
     clean_title = clean_movie_title(title)
     search_query_with_year = f"{clean_title} {year}".strip()
 
     def execute_query(query):
-        print(f"🔍 Recherche C411 (name={query})")
+        print(f"🔍 Recherche API C411 (name={query})")
         try:
             r = requests.get(
-                "https://c411.org/torrents",
+                "https://c411.org/api/torrents/search",  # Utilisation de la route API dédiée
                 headers=headers,
-                params={"name": query},  # Correction validée par l'inspecteur réseau
+                params={"name": query},
                 timeout=TIMEOUT_SECONDS
             )
         except requests.exceptions.RequestException as e:
@@ -50,7 +51,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             return []
 
         if isinstance(data, dict):
-            return data.get("results", [])
+            return data.get("results", []) or data.get("data", [])
         elif isinstance(data, list):
             return data
         return []
@@ -75,7 +76,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
         print(f"❌ Aucun torrent trouvé sur C411 pour : {clean_title}")
         sys.exit(0)
 
-    # 🎯 Sélection intelligente du meilleur torrent (privilégie l'année correspondante)
+    # 🎯 Sélection intelligente du meilleur torrent
     best_match = None
     for torrent in results:
         t_name = torrent.get("name", "").lower()
