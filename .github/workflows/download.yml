@@ -2,97 +2,212 @@ name: Plex Download Processing
 
 on:
   repository_dispatch:
-    types: [download_movie]
+    types:
+      - download_movie
 
 jobs:
   process-download:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
-      - name: Install Dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install requests
 
-      - name: Send Torrent to AllDebrid
+      - name: Search C411 and send to AllDebrid
         env:
           INPUT_USER: ${{ github.event.client_payload.user }}
           INPUT_PASS_HASH: ${{ github.event.client_payload.pass_hash }}
+
           VALID_USER: ${{ secrets.APP_USER }}
           VALID_PASS: ${{ secrets.APP_PASSWORD }}
+
           C411_TOKEN: ${{ secrets.C411_API_TOKEN }}
           ALLDEBRID_KEY: ${{ secrets.ALLDEBRID_API_KEY }}
+
           MOVIE_TITLE: ${{ github.event.client_payload.title }}
           MOVIE_YEAR: ${{ github.event.client_payload.year }}
+
         run: |
-          python -c "
-          import os, sys, requests, hashlib, re
+          python << 'EOF'
 
-          # 1. Verification de l'authentification
-          valid_user = os.environ.get('VALID_USER')
-          valid_pass = os.environ.get('VALID_PASS')
-          input_user = os.environ.get('INPUT_USER')
-          input_hash = os.environ.get('INPUT_PASS_HASH')
+          import hashlib
+          import os
+          import re
+          import sys
 
-          expected_hash = hashlib.sha256(valid_pass.encode('utf-8')).hexdigest()
+          import requests
 
-          if input_user != valid_user or input_hash.lower() != expected_hash.lower():
-              print('❌ Erreur : Authentification echouee.')
+
+          ##########################################################
+          # Authentification
+          ##########################################################
+
+          print("🔐 Vérification de l'authentification...")
+
+          valid_user = os.environ["VALID_USER"]
+          valid_pass = os.environ["VALID_PASS"]
+
+          input_user = os.environ.get("INPUT_USER", "")
+          input_hash = os.environ.get("INPUT_PASS_HASH", "")
+
+          expected_hash = hashlib.sha256(
+              valid_pass.encode("utf-8")
+          ).hexdigest()
+
+          if (
+              input_user != valid_user
+              or input_hash.lower() != expected_hash.lower()
+          ):
+              print("❌ Authentification refusée.")
               sys.exit(1)
 
-          print('✅ Authentification reussie.')
+          print("✅ Authentification validée")
 
-          # 2. Nettoyage approfondi incluant les apostrophes
-          c411_token = os.environ.get('C411_TOKEN')
-          title = os.environ.get('MOVIE_TITLE', '')
-          year = os.environ.get('MOVIE_YEAR', '')
 
-          # On remplace les apostrophes, points, tirets et ponctuations par des espaces
-          clean_title = re.sub(r'[\'’\\._:\\?!\-,]', ' ', title)
-          clean_title = ' '.join(clean_title.split())
+          ##########################################################
+          # Variables
+          ##########################################################
 
-          search_query = f'{clean_title} {year}'.strip()
-          print(f'🔍 Recherche de \"{search_query}\" sur C411...')
+          c411_token = os.environ["C411_TOKEN"]
+          alldebrid_key = os.environ["ALLDEBRID_KEY"]
 
-          headers = {'Authorization': f'Bearer {c411_token}'}
-          res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(search_query)}', headers=headers)
+          title = os.environ.get("MOVIE_TITLE", "")
+          year = os.environ.get("MOVIE_YEAR", "")
 
-          if res.status_code != 200:
-              print(f'❌ Erreur API C411 (Code: {res.status_code})')
-              sys.exit(1)
+          clean_title = re.sub(r"[\'’\.\,\-\_\:\!\?]", " ", title)
+          clean_title = " ".join(clean_title.split())
 
-          data = res.json()
-          results = data.get('results', []) or data if isinstance(data, list) else []
+          search_query = f"{clean_title} {year}".strip()
 
-          # Si aucun resultat avec l'annee, on essaie sans l'annee
+          print()
+          print(f"🎬 Film : {title}")
+          print(f"🔍 Recherche : {search_query}")
+          print()
+
+
+          ##########################################################
+          # Recherche C411
+          ##########################################################
+
+          headers = {
+              "Authorization": f"Bearer {c411_token}"
+          }
+
+          def search(query):
+
+              print(f"Recherche C411 : {query}")
+
+              r = requests.get(
+                  "https://c411.org/api/torrents",
+                  headers=headers,
+                  params={"q": query},
+                  timeout=30
+              )
+
+              print("Code HTTP :", r.status_code)
+
+              if r.status_code != 200:
+                  print(r.text)
+                  sys.exit(1)
+
+              try:
+                  data = r.json()
+              except Exception:
+                  print("Réponse non JSON :")
+                  print(r.text)
+                  sys.exit(1)
+
+              if isinstance(data, dict):
+                  return data.get("results", [])
+
+              if isinstance(data, list):
+                  return data
+
+              return []
+
+
+          results = search(search_query)
+
           if not results and year:
-              print(f'⚠️ Aucun resultat avec l\'annee, essai sans l\'annee...')
-              res = requests.get(f'https://c411.org/api/torrents?q={requests.utils.quote(clean_title)}', headers=headers)
-              data = res.json()
-              results = data.get('results', []) or data if isinstance(data, list) else []
+              print()
+              print("Aucun résultat avec l'année.")
+              print("Nouvelle tentative...")
+              print()
+
+              results = search(clean_title)
 
           if not results:
-              print(f'❌ Aucun resultat trouve sur C411 pour {clean_title}')
+              print("❌ Aucun torrent trouvé.")
               sys.exit(0)
 
-          target = results[0]
-          torrent_link = target.get('magnet') or target.get('download_url') or target.get('link')
-          print(f'📦 Torrent cible trouve : {target.get(\"name\", \"Inconnu\")}')
+          torrent = results[0]
 
-          # 3. Envoi au convertisseur Torrents d'AllDebrid
-          alldebrid_key = os.environ.get('ALLDEBRID_KEY')
-          print('🚀 Envoi du magnet au convertisseur AllDebrid...')
+          print()
+          print("✅ Torrent trouvé")
+          print(torrent.get("name"))
+          print()
 
-          alldebrid_url = f'https://api.alldebrid.com/v4/magnet/upload?agent=PlexManager&apikey={alldebrid_key}&magnets[]={requests.utils.quote(torrent_link)}'
-          ad_res = requests.get(alldebrid_url)
-          
-          print('Reponse AllDebrid:', ad_res.json())
-          print('✨ Le torrent a bien ete soumis au convertisseur AllDebrid !')
-          "
+
+          ##########################################################
+          # Magnet
+          ##########################################################
+
+          magnet = (
+              torrent.get("magnet")
+              or torrent.get("download_url")
+              or torrent.get("link")
+          )
+
+          if not magnet:
+              print("❌ Aucun lien magnet.")
+              sys.exit(1)
+
+
+          ##########################################################
+          # Envoi AllDebrid
+          ##########################################################
+
+          print("🚀 Envoi vers AllDebrid...")
+
+          params = {
+              "agent": "PlexManager",
+              "apikey": alldebrid_key,
+              "magnets[]": magnet
+          }
+
+          response = requests.get(
+              "https://api.alldebrid.com/v4/magnet/upload",
+              params=params,
+              timeout=30
+          )
+
+          print("HTTP :", response.status_code)
+
+          try:
+              result = response.json()
+          except Exception:
+              print(response.text)
+              sys.exit(1)
+
+          print()
+          print("Réponse AllDebrid :")
+          print(result)
+          print()
+
+          if result.get("status") != "success":
+              print("❌ Erreur AllDebrid")
+              sys.exit(1)
+
+          print("🎉 Torrent envoyé avec succès !")
+
+          EOF
