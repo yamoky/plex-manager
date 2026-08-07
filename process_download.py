@@ -15,9 +15,7 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur C411 avec des en-têtes HTTP de navigateur pour éviter le blocage."""
-    
-    # En-têtes complets pour faire croire à une requête légitime de navigateur
+    """Recherche un torrent sur C411 avec les paramètres complets de l'API web."""
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -32,11 +30,21 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
 
     def execute_query(query):
         print(f"🔍 Recherche C411 (name={query})")
+        
+        # Paramètres exacts exigés par l'API de C411 vus dans le navigateur
+        params = {
+            "page": 1,
+            "perPage": 25,
+            "sortBy": "relevance",
+            "sortOrder": "desc",
+            "name": query
+        }
+
         try:
             r = requests.get(
-                "https://c411.org/api/torrents/search",
+                "https://c411.org/torrents",
                 headers=headers,
-                params={"name": query},
+                params=params,
                 timeout=TIMEOUT_SECONDS
             )
         except requests.exceptions.RequestException as e:
@@ -44,10 +52,9 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             sys.exit(1)
 
         print(f"Code HTTP C411 : {r.status_code}")
+        print(f"📄 Réponse brute C411 (début) : {r.text[:300]}")
         
-        # Vérification si on reçoit du HTML (protection anti-bot)
-        if r.text.strip().startswith("<!DOCTYPE html>") or "<html" in r.text[:100].lower():
-            print("⚠️ Le site a renvoyé une page HTML (protection anti-bot ou redirection).")
+        if r.status_code != 200:
             return []
 
         try:
@@ -57,7 +64,7 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             return []
 
         if isinstance(data, dict):
-            return data.get("results", []) or data.get("data", [])
+            return data.get("results", []) or data.get("data", []) or data.get("items", [])
         elif isinstance(data, list):
             return data
         return []
