@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plex Manager - Accès Sécurisé</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #141414; color: #fff; margin: 0; padding: 20px; }
+    h1 { text-align: center; color: #e50914; margin-bottom: 5px; }
+    .auth-container { text-align: center; margin-bottom: 25px; background: #1f1f1f; padding: 15px; border-radius: 8px; max-width: 400px; margin-left: auto; margin-right: auto; }
+    .auth-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+    .search-box { display: flex; justify-content: center; gap: 10px; margin-bottom: 25px; }
+    input { padding: 12px; border-radius: 6px; border: 1px solid #333; background: #222; color: #fff; font-size: 16px; }
+    input[type="text"], input[type="password"] { width: 90%; max-width: 300px; margin: 0 auto; }
+    button { padding: 12px 18px; background: #e50914; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 20px; max-width: 1000px; margin: 0 auto; }
+    .card { background: #1f1f1f; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; text-align: center; }
+    .card img { width: 100%; height: 240px; object-fit: cover; }
+    .card-content { padding: 10px; flex-grow: 1; display: flex; flex-direction: column; justify-content: space-between; }
+    .card h3 { font-size: 14px; margin: 5px 0; }
+    .status { text-align: center; font-size: 14px; margin: 15px 0; color: #4caf50; font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>Plex Manager</h1>
+  
+  <div class="auth-container">
+    <h3>Connexion Sécurisée</h3>
+    <div class="auth-group">
+      <input type="text" id="username" placeholder="Identifiant" oninput="saveCredentials()">
+      <input type="password" id="password" placeholder="Mot de passe" oninput="saveCredentials()">
+    </div>
+  </div>
+
+  <div class="search-box">
+    <input type="text" id="query" placeholder="Rechercher un film..." onkeypress="if(event.key==='Enter') searchMovie()">
+    <button onclick="searchMovie()">Chercher</button>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="results" class="grid"></div>
+
+  <script>
+    const TMDB_API_KEY = "3fd2be6f0c70a2a598f084dd92ef0778";
+    
+    document.getElementById('username').value = localStorage.getItem('plex_user') || '';
+    document.getElementById('password').value = localStorage.getItem('plex_pass') || '';
+
+    function saveCredentials() {
+      localStorage.setItem('plex_user', document.getElementById('username').value);
+      localStorage.setItem('plex_pass', document.getElementById('password').value);
+    }
+
+    async function hashSHA256(str) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function searchMovie() {
+      const q = document.getElementById('query').value;
+      if (!q) return;
+      const res = await fetch(`https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}&language=fr-FR`);
+      const data = await res.json();
+      
+      const grid = document.getElementById('results');
+      grid.innerHTML = '';
+      
+      data.results.slice(0, 8).forEach(m => {
+        const poster = m.poster_path ? `https://image.tmdb.org/t/p/w500${m.poster_path}` : 'https://via.placeholder.com/500x750?text=Pas+d+image';
+        const year = m.release_date ? m.release_date.split('-')[0] : 'Inconnue';
+        grid.innerHTML += `
+          <div class="card">
+            <img src="${poster}" alt="${m.title}">
+            <div class="card-content">
+              <h3>${m.title} (${year})</h3>
+              <button onclick="requestMovie('${m.title.replace(/'/g, "\\'")}', '${year}')">Ajouter à Plex</button>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    async function requestMovie(title, year) {
+      const user = document.getElementById('username').value;
+      const pass = document.getElementById('password').value;
+      const statusDiv = document.getElementById('status');
+
+      if (!user || !pass) {
+        statusDiv.style.color = '#f44336';
+        statusDiv.innerText = "Veuillez saisir votre identifiant et mot de passe.";
+        return;
+      }
+
+      statusDiv.style.color = '#ff9800';
+      statusDiv.innerText = `Chiffrement et envoi pour "${title}"...`;
+
+      const passHash = await hashSHA256(pass);
+
+      try {
+        // RÉCUPÉRATION DYNAMIQUE DU PSEUDO ET DU REPO DEPUIS L'URL
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const repoName = pathParts[0] || 'plex-manager';
+        const userName = window.location.hostname.split('.')[0];
+
+        await fetch(`https://api.github.com/repos/${userName}/${repoName}/dispatches`, {
+          method: 'POST',
+          headers: { 'Accept': 'application/vnd.github.v3+json' },
+          body: JSON.stringify({
+            event_type: 'download_movie',
+            client_payload: { 
+              title: title, 
+              year: year,
+              user: user,
+              pass_hash: passHash 
+            }
+          })
+        });
+
+        statusDiv.style.color = '#4caf50';
+        statusDiv.innerText = `Demande envoyée avec succès pour "${title}" !`;
+      } catch (err) {
+        statusDiv.style.color = '#f44336';
+        statusDiv.innerText = "Erreur de connexion au serveur.";
+      }
+    }
+  </script>
+</body>
+</html>
