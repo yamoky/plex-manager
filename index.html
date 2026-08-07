@@ -44,10 +44,10 @@
     <div id="login-error" style="color:#f44336; font-size:13px; margin-top:12px; font-weight:bold;"></div>
   </div>
 
-  <!-- ECRAN RECHERCHE -->
+  <!-- ECRAN DE RECHERCHE -->
   <div id="app-section">
     <div class="user-bar">
-      <span>Connecté en tant que : <strong id="logged-user" style="color:#4caf50;"></strong></span>
+      <span>Session ouverte : <strong id="logged-user" style="color:#4caf50;"></strong></span>
       <button class="btn-red btn-secondary" style="width:auto; padding:6px 12px;" onclick="handleLogout()">Déconnexion</button>
     </div>
 
@@ -67,7 +67,6 @@
       const savedUser = localStorage.getItem('plex_user');
       const savedPass = localStorage.getItem('plex_pass');
       if (savedUser && savedPass) {
-        // Restaure directement la session si enregistrée
         showApp(savedUser);
       }
     };
@@ -82,8 +81,6 @@
         return;
       }
 
-      // Enregistre et bascule sur l'interface de recherche
-      // (La validation finale des accès se fera de toute façon par le serveur lors du premier téléchargement)
       localStorage.setItem('plex_user', u);
       localStorage.setItem('plex_pass', p);
       errDiv.innerText = "";
@@ -191,7 +188,7 @@
           statusDiv.innerText = `Demande transmise avec succès pour "${title}" !`;
         } else {
           statusDiv.style.color = '#f44336';
-          statusDiv.innerText = "Erreur d'envoi au serveur.";
+          statusDiv.innerText = "Erreur d'envoi. Vérifiez les accès.";
         }
       } catch (err) {
         statusDiv.style.color = '#f44336';
