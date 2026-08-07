@@ -15,14 +15,14 @@ def clean_movie_title(title: str) -> str:
     return " ".join(cleaned.split())
 
 def search_c411_torrent(token: str, title: str, year: str) -> dict:
-    """Recherche un torrent sur l'API C411 avec l'année, puis sans l'année."""
+    """Recherche un torrent sur l'API C411 avec plusieurs niveaux de repli."""
     headers = {
         "Authorization": f"Bearer {token}",
         "User-Agent": "PlexManager/1.0"
     }
 
     clean_title = clean_movie_title(title)
-    search_query = f"{clean_title} {year}".strip()
+    search_query_with_year = f"{clean_title} {year}".strip()
 
     def execute_query(query):
         print(f"🔍 Recherche C411 : {query}")
@@ -56,13 +56,21 @@ def search_c411_torrent(token: str, title: str, year: str) -> dict:
             return data
         return []
 
-    # 1. Premier essai avec l'année
-    results = execute_query(search_query)
+    # 1. Essai avec le titre complet + l'année
+    results = execute_query(search_query_with_year)
 
-    # 2. Second essai sans l'année si aucun résultat
-    if not results and year:
-        print("⚠️ Aucun résultat avec l'année. Nouvelle tentative sans l'année...")
+    # 2. Essai avec le titre complet sans l'année
+    if not results:
+        print("⚠️ Aucun résultat avec l'année. Essai avec le titre complet...")
         results = execute_query(clean_title)
+
+    # 3. Essai de repli ultra-court (ex: garde les 2 premiers mots principaux, ex: "Star Wars")
+    if not results:
+        words = [w for w in clean_title.split() if w.lower() not in ['les', 'des', 'un', 'une', 'la', 'le', 'de', 'du']]
+        short_query = ' '.join(words[:2]) if len(words) >= 2 else clean_title
+        if short_query.lower() != clean_title.lower():
+            print(f"⚠️ Essai avec les mots-clés principaux : {short_query}")
+            results = execute_query(short_query)
 
     if not results:
         print(f"❌ Aucun torrent trouvé sur C411 pour : {clean_title}")
